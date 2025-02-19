@@ -1,5 +1,7 @@
+use chrono::{NaiveTime, Utc};
 use ffi::Vector2;
-use raylib::{ffi::CheckCollisionPointCircle, ffi::GetRandomValue, prelude::*};
+use rand::prelude::*;
+use raylib::{ffi::CheckCollisionPointCircle, prelude::*};
 
 const WINDOW_WIDTH: i32 = 1200;
 const WINDOW_HEIGHT: i32 = 800;
@@ -17,10 +19,19 @@ struct Target {
     dir_x: f32,
 }
 
+enum GameDifficult {
+    Easy,
+    Medium,
+    Hard,
+}
+
 struct GameState {
     current_screen: GameScreens,
-    points: i32,
     targets: Vec<Target>,
+    started_at: Option<NaiveTime>,
+    finished_at: Option<NaiveTime>,
+    clicks: i32,
+    difficult: GameDifficult,
 }
 
 fn main() {
@@ -31,70 +42,133 @@ fn main() {
 
     rl.set_exit_key(Some(KeyboardKey::KEY_NULL));
 
+    let mut rng = rand::rng();
+
     let mut game_state: GameState = GameState {
         current_screen: GameScreens::MainScreen,
-        points: 0,
         targets: vec![],
+        started_at: None,
+        finished_at: None,
+        clicks: 0,
+        difficult: GameDifficult::Easy,
     };
 
     rl.set_target_fps(60);
 
     while !rl.window_should_close() {
         match game_state.current_screen {
-            GameScreens::MainScreen => {
-                update_main_screen(&mut rl, &mut game_state);
-            }
-            GameScreens::GameRunning => {
-                update_game_screen(&mut rl, &mut game_state);
-            }
+            GameScreens::MainScreen => update_main_screen(&mut rl, &mut game_state, &mut rng),
+            GameScreens::GameRunning => update_game_screen(&mut rl, &mut game_state),
             GameScreens::WinningScreen => update_wining_screen(&mut rl, &mut game_state),
         }
 
         let mut canvas = rl.begin_drawing(&thread);
 
         match game_state.current_screen {
-            GameScreens::MainScreen => {
-                draw_main_screen(&mut canvas);
-            }
-            GameScreens::GameRunning => {
-                draw_game_screen(&mut canvas, &game_state);
-            }
+            GameScreens::MainScreen => draw_main_screen(&mut canvas, &game_state),
+            GameScreens::GameRunning => draw_game_screen(&mut canvas, &game_state),
             GameScreens::WinningScreen => draw_wining_screen(&mut canvas, &game_state),
         }
     }
 }
 
-fn update_main_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
+fn update_main_screen(rl: &mut RaylibHandle, game_state: &mut GameState, rng: &mut ThreadRng) {
     if rl.is_key_pressed(KeyboardKey::KEY_SPACE) {
+        game_state.started_at = Some(Utc::now().time());
         game_state.targets = vec![];
+        game_state.clicks = 0;
         for _ in 0..10 {
-            unsafe {
-                let pos_y = GetRandomValue(30, WINDOW_HEIGHT - 30) as f32;
-                let pos_x = GetRandomValue(30, WINDOW_WIDTH - 30) as f32;
-                let dir_y = GetRandomValue(-2, 2) as f32;
-                let dir_x = GetRandomValue(-2, 2) as f32;
+            let pos_y = rng.random_range(30.0..(WINDOW_HEIGHT - 30) as f32);
+            let pos_x = rng.random_range(30.0..(WINDOW_WIDTH - 30) as f32);
+            let mut dir_y = match game_state.difficult {
+                GameDifficult::Easy => 1.0,
+                GameDifficult::Hard => 5.0,
+                GameDifficult::Medium => 3.0,
+            };
+            let mut dir_x = match game_state.difficult {
+                GameDifficult::Easy => 1.0,
+                GameDifficult::Hard => 5.0,
+                GameDifficult::Medium => 3.0,
+            };
 
-                game_state.targets.push(Target {
-                    pos_x,
-                    pos_y,
-                    dir_y,
-                    dir_x,
-                });
+            if rng.random() {
+                dir_x *= -1.0;
             }
+
+            if rng.random() {
+                dir_y *= -1.0;
+            }
+            game_state.targets.push(Target {
+                pos_x,
+                pos_y,
+                dir_y,
+                dir_x,
+            });
         }
 
         game_state.current_screen = GameScreens::GameRunning
     }
+
+    if rl.is_key_pressed(KeyboardKey::KEY_ONE) {
+        game_state.difficult = GameDifficult::Easy
+    }
+    if rl.is_key_pressed(KeyboardKey::KEY_TWO) {
+        game_state.difficult = GameDifficult::Medium
+    }
+    if rl.is_key_pressed(KeyboardKey::KEY_THREE) {
+        game_state.difficult = GameDifficult::Hard
+    }
 }
 
-fn draw_main_screen(canvas: &mut RaylibDrawHandle) {
+fn draw_main_screen(canvas: &mut RaylibDrawHandle, game_state: &GameState) {
     canvas.clear_background(Color::new(135, 206, 235, 255));
-    let text_size = canvas.measure_text("Hello Raylib", 20);
+    let text = "Clicker Game";
+    let text_fsize = 40;
+    let text_size = canvas.measure_text(&text, text_fsize);
     canvas.draw_text(
-        "Hello Raylib",
+        &text,
         (WINDOW_WIDTH / 2) - (text_size / 2),
-        (WINDOW_HEIGHT / 2) - 10,
-        20,
+        (WINDOW_HEIGHT / 2) - 100,
+        text_fsize,
+        Color::BLACK,
+    );
+
+    let current_difficult = match game_state.difficult {
+        GameDifficult::Easy => "Easy",
+        GameDifficult::Hard => "Hard",
+        GameDifficult::Medium => "Medium",
+    };
+
+    let text = format!("Current difficult: {}", current_difficult);
+    let text_fsize = 20;
+    let text_size = canvas.measure_text(&text, text_fsize);
+    canvas.draw_text(
+        &text,
+        (WINDOW_WIDTH / 2) - (text_size / 2),
+        (WINDOW_HEIGHT / 2) - 25,
+        text_fsize,
+        Color::BLACK,
+    );
+
+    let text = "Press 1 to easy; 2 to medium and 3 to hard";
+    let text_fsize = 20;
+    let text_size = canvas.measure_text(&text, text_fsize);
+    canvas.draw_text(
+        &text,
+        (WINDOW_WIDTH / 2) - (text_size / 2),
+        (WINDOW_HEIGHT / 2) + 25,
+        text_fsize,
+        Color::BLACK,
+    );
+
+    let text = "Press Space to start";
+    let text_fsize = 20;
+    let text_size = canvas.measure_text(&text, text_fsize);
+    canvas.draw_text(
+        &text,
+        (WINDOW_WIDTH / 2) - (text_size / 2),
+        (WINDOW_HEIGHT / 2) + 100,
+        text_fsize,
         Color::BLACK,
     );
 }
@@ -105,6 +179,10 @@ fn update_game_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
     }
 
     let mut targets: Vec<Target> = vec![];
+
+    if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+        game_state.clicks += 1;
+    }
 
     for target in game_state.targets.iter_mut() {
         let mut keep_alive = true;
@@ -130,7 +208,6 @@ fn update_game_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
                     },
                     15.0,
                 ) {
-                    game_state.points += 1;
                     keep_alive = false
                 }
             }
@@ -147,6 +224,7 @@ fn update_game_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
     }
 
     if targets.len() == 0 {
+        game_state.finished_at = Some(Utc::now().time());
         game_state.current_screen = GameScreens::WinningScreen
     }
     game_state.targets = targets;
@@ -160,12 +238,25 @@ fn draw_game_screen(canvas: &mut RaylibDrawHandle, game_state: &GameState) {
     }
     canvas.draw_fps(WINDOW_WIDTH - 100, 0);
 
+    let now = Utc::now().time();
+    let diff = now - game_state.started_at.unwrap();
+    let timer_text = format!("{}.{}", diff.num_seconds(), diff.num_milliseconds());
+    let timer_size = canvas.measure_text(&timer_text, 20);
+
     canvas.draw_text(
-        &format!("Points: {}", game_state.points),
+        &timer_text,
+        (WINDOW_WIDTH / 2) - (timer_size / 2),
+        10,
         20,
+        Color::RED,
+    );
+
+    canvas.draw_text(
+        &format!("Clicks: {}", game_state.clicks),
+        10,
+        10,
         20,
-        20,
-        Color::BLUEVIOLET,
+        Color::BLACK,
     );
 }
 
@@ -175,15 +266,44 @@ fn update_wining_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
     }
 }
 
-fn draw_wining_screen(canvas: &mut RaylibDrawHandle, _game_state: &GameState) {
+fn draw_wining_screen(canvas: &mut RaylibDrawHandle, game_state: &GameState) {
     canvas.clear_background(Color::new(135, 206, 235, 255));
-    let text = "Congrats, you won!";
-    let text_size = canvas.measure_text(text, 20);
+    let text = "Congrats!";
+    let text_size = canvas.measure_text(text, 50);
     canvas.draw_text(
         text,
         (WINDOW_WIDTH / 2) - (text_size / 2),
-        (WINDOW_HEIGHT / 2) - 10,
-        20,
+        (WINDOW_HEIGHT / 2) - 100,
+        50,
         Color::GREEN,
     );
+
+    let diff = game_state.finished_at.unwrap() - game_state.started_at.unwrap();
+    let timer_text = format!(
+        "You finished in {}.{} seconds, with {} total clicks!",
+        diff.num_seconds(),
+        diff.num_milliseconds(),
+        game_state.clicks
+    );
+    let timer_size = canvas.measure_text(&timer_text, 40);
+
+    canvas.draw_text(
+        &timer_text,
+        (WINDOW_WIDTH / 2) - (timer_size / 2),
+        WINDOW_HEIGHT / 2,
+        40,
+        Color::GOLD,
+    );
+
+    let restart_text = "Press Enter to restart";
+    let restart_fsize = 20;
+    let restart_size = canvas.measure_text(&restart_text, restart_fsize);
+
+    canvas.draw_text(
+        &restart_text,
+        (WINDOW_WIDTH / 2) - (restart_size / 2),
+        (WINDOW_HEIGHT / 2) + 100,
+        restart_fsize,
+        Color::BLACK,
+    )
 }
