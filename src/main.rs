@@ -29,6 +29,8 @@ fn main() {
         .title("Rust + Raylib = <3")
         .build();
 
+    rl.set_exit_key(Some(KeyboardKey::KEY_NULL));
+
     let mut game_state: GameState = GameState {
         current_screen: GameScreens::MainScreen,
         points: 0,
@@ -67,8 +69,8 @@ fn update_main_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
         game_state.targets = vec![];
         for _ in 0..10 {
             unsafe {
-                let pos_y = GetRandomValue(0, WINDOW_HEIGHT) as f32;
-                let pos_x = GetRandomValue(0, WINDOW_WIDTH) as f32;
+                let pos_y = GetRandomValue(30, WINDOW_HEIGHT - 30) as f32;
+                let pos_x = GetRandomValue(30, WINDOW_WIDTH - 30) as f32;
                 let dir_y = GetRandomValue(-2, 2) as f32;
                 let dir_x = GetRandomValue(-2, 2) as f32;
 
@@ -98,7 +100,7 @@ fn draw_main_screen(canvas: &mut RaylibDrawHandle) {
 }
 
 fn update_game_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
-    if rl.is_key_pressed(KeyboardKey::KEY_SPACE) {
+    if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
         game_state.current_screen = GameScreens::MainScreen
     }
 
@@ -153,6 +155,9 @@ fn update_game_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
 fn draw_game_screen(canvas: &mut RaylibDrawHandle, game_state: &GameState) {
     canvas.clear_background(Color::new(135, 206, 235, 255));
 
+    for target in game_state.targets.iter() {
+        canvas.draw_circle(target.pos_x as i32, target.pos_y as i32, 15.0, Color::RED);
+    }
     canvas.draw_fps(WINDOW_WIDTH - 100, 0);
 
     canvas.draw_text(
@@ -162,10 +167,6 @@ fn draw_game_screen(canvas: &mut RaylibDrawHandle, game_state: &GameState) {
         20,
         Color::BLUEVIOLET,
     );
-
-    for target in game_state.targets.iter() {
-        canvas.draw_circle(target.pos_x as i32, target.pos_y as i32, 15.0, Color::RED);
-    }
 }
 
 fn update_wining_screen(rl: &mut RaylibHandle, game_state: &mut GameState) {
